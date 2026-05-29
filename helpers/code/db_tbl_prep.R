@@ -5,9 +5,9 @@ con <- dbConnect(duckdb())
 dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
 
 base_url <- "https://github.com/joesimeone/ucmr_exploration/releases/download/v1.0.0"
+drop_box_url <- 'https://www.dropbox.com/scl/fi/tv9ohoo8zr6t7o0yslzew/epa_water_boundaries.parquet?rlkey=s7uvdb0k4pjksumm4x4zrpo61&st=6m94s33p&dl=1'
 
-# Big file stays local
-dbExecute(con, "CREATE VIEW epa_water_boundaries AS SELECT * FROM 'epa_water_boundaries.parquet'")
+dbExecute(con, glue::glue("CREATE VIEW epa_water_boundaries AS SELECT * FROM '{drop_box_url}'")) 
 
 # Everything else reads from GitHub
 for (tbl in c("tract_boundaries", "wgt_tract_contam", "ucmr_og_tract_contam", "pws_wgt_tract_contam")) {

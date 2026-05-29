@@ -48,6 +48,7 @@ theme_set(
 ## =======================================================================
 states <- tract_contam_tbl |>
   distinct(state_name) |>
+  arrange(state_name) |> 
   collect() |>
   pull()
 
