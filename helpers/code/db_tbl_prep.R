@@ -1,6 +1,18 @@
 # Connect to database. Once done stop doing that -------------------------
-con <- dbConnect(duckdb(), dbdir = "ucmr_shiny.db")
-onStop(function() dbDisconnect(con))
+# con <- dbConnect(duckdb(), dbdir = "ucmr_shiny.db")
+# onStop(function() dbDisconnect(con))
+con <- dbConnect(duckdb())
+dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+
+base_url <- "https://github.com/joesimeone/ucmr_exploration/releases/download/v1.0.0"
+
+# Big file stays local
+dbExecute(con, "CREATE VIEW epa_water_boundaries AS SELECT * FROM 'epa_water_boundaries.parquet'")
+
+# Everything else reads from GitHub
+for (tbl in c("tract_boundaries", "wgt_tract_contam", "ucmr_og_tract_contam", "pws_wgt_tract_contam")) {
+  dbExecute(con, sprintf("CREATE VIEW %s AS SELECT * FROM '%s/%s.parquet'", tbl, base_url, tbl))
+}
 
 
 # Prep Tract Table  ------------------------------------------------------
