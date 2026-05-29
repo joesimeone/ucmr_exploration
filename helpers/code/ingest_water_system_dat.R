@@ -13,10 +13,10 @@ dbExecute(con, "INSTALL spatial;;")
 dbExecute(con, "LOAD httpfs;;")
 
 # Attach the source database
-dbExecute(
-  con,
-  "ATTACH 'C:/git/epa_water_stuff/data/tract_water_system_db.duckdb' AS source_db (READ_ONLY)"
-)
+# dbExecute(
+#   con,
+#   "ATTACH 'C:/git/epa_water_stuff/data/tract_water_system_db.duckdb' AS source_db (READ_ONLY)"
+# )
 
 dbListTables(con)
 
