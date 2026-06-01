@@ -1,5 +1,2 @@
 ucmr_shiny.db
-export/pws_wgt_tract_contam.parquet
-export/tract_boundaries.parquet
-export/ucmr_og_tract_contam.parquet
-export/wgt_tract_contam.parquet
+export/*
