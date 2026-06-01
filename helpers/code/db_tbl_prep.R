@@ -26,7 +26,7 @@ con <- dbConnect(duckdb())
 onStop(function() dbDisconnect(con, shutdown = TRUE))
  
 dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
- 
+
 r2_account <- Sys.getenv("R2_ACCOUNT_ID")
 r2_key     <- Sys.getenv("R2_ACCESS_KEY_ID_RR")
 r2_secret  <- Sys.getenv("R2_SECRET_ACCESS_KEY_rr")
