@@ -1,27 +1,74 @@
-# Connect to database. Once done stop doing that -------------------------
-# con <- dbConnect(duckdb(), dbdir = "ucmr_shiny.db")
-# onStop(function() dbDisconnect(con))
+# =============================================================================
+#  db_tbl_prep.R  —  DuckDB ↔ Cloudflare R2
+#
+#  Replaces the GitHub release URL approach with R2.
+#  All cleaning/mutation logic is preserved exactly as-is.
+#
+#  Bucket layout (flat — no partitioning needed given your current structure):
+#    s3://your-bucket/
+#      tract_boundaries.parquet
+#      wgt_tract_contam.parquet
+#      ucmr_og_tract_contam.parquet
+#      pws_wgt_tract_contam.parquet
+#      epa_water_boundaries.parquet   ← was local before, now also on R2
+#
+#  Credentials in .Renviron:
+#    R2_ACCESS_KEY_ID=...
+#    R2_SECRET_ACCESS_KEY=...
+#    R2_ACCOUNT_ID=...
+#    R2_BUCKET=your-bucket-name
+# =============================================================================
+ 
+ 
+# Connect & configure --------------------------------------------------------
+ 
 con <- dbConnect(duckdb())
+onStop(function() dbDisconnect(con, shutdown = TRUE))
+ 
 dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+ 
+r2_account <- Sys.getenv("R2_ACCOUNT_ID")
+r2_key     <- Sys.getenv("R2_ACCESS_KEY_ID_RR")
+r2_secret  <- Sys.getenv("R2_SECRET_ACCESS_KEY_rr")
+r2_bucket  <- Sys.getenv("R2_BUCKET")
+ 
+dbExecute(con, sprintf("
+  SET s3_endpoint          = '%s.r2.cloudflarestorage.com';
+  SET s3_access_key_id     = '%s';
+  SET s3_secret_access_key = '%s';
+  SET s3_region            = 'auto';
+  SET s3_url_style         = 'path';
+", r2_account, r2_key, r2_secret))
+ 
+base_url <- sprintf("s3://%s", r2_bucket)
 
-base_url <- "https://github.com/joesimeone/ucmr_exploration/releases/download/v1.0.0"
-drop_box_url <- 'https://www.dropbox.com/scl/fi/tv9ohoo8zr6t7o0yslzew/epa_water_boundaries.parquet?rlkey=s7uvdb0k4pjksumm4x4zrpo61&st=6m94s33p&dl=1'
 
-dbExecute(con, glue::glue("CREATE VIEW epa_water_boundaries AS SELECT * FROM '{drop_box_url}'")) 
 
-# Everything else reads from GitHub
-for (tbl in c("tract_boundaries", "wgt_tract_contam", "ucmr_og_tract_contam", "pws_wgt_tract_contam")) {
-  dbExecute(con, sprintf("CREATE VIEW %s AS SELECT * FROM '%s/%s.parquet'", tbl, base_url, tbl))
+# Create views from bucket source ----------------------------------------
+# Flat files
+for (tbl in c("wgt_tract_contam", "ucmr_og_tract_contam", "pws_wgt_tract_contam")) {
+  dbExecute(con, sprintf(
+    "CREATE VIEW %s AS SELECT * FROM '%s/stats/%s.parquet'",
+    tbl, base_url, tbl
+  ))
 }
+
+# Hive partitioned
+dbExecute(con, sprintf(
+  "CREATE VIEW tract_boundaries AS SELECT * FROM read_parquet('%s/tract_boundaries/**/*.parquet', hive_partitioning = true)",
+  base_url
+))
+
+dbExecute(con, sprintf(
+  "CREATE VIEW epa_water_boundaries AS SELECT * FROM read_parquet('%s/epa_water_parts/**/*.parquet', hive_partitioning = true)",
+  base_url
+))
+ 
 
 
 # Prep Tract Table  ------------------------------------------------------
 tract_sf_tbl <-
   tbl(con, 'tract_boundaries') |>
-  left_join(
-    tbl(con, 'wgt_tract_contam') |> distinct(tract_geoid, state_name),
-    by = c('GEOID' = 'tract_geoid')
-  ) |>
   mutate(
     crs_info = case_when(
       st_fips == '02' ~ 3338,
@@ -173,10 +220,6 @@ tract_contam_tbl <-
 
 epa_water_sf <-
   tbl(con, 'epa_water_boundaries') |>
-  inner_join(
-    tbl(con, 'ucmr_og_tract_contam') |> distinct(PWSID, state_name),
-    by = c('PWSID')
-  ) |> 
   mutate(
     crs_info = case_when(
       state_name == 'Alaska' ~ 3338,
